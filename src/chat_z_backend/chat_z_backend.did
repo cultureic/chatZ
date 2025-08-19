@@ -1,0 +1,118 @@
+type MessageType = variant {
+    Text;
+    Image;
+    System;
+};
+
+type Attachment = record {
+    file_type: text;
+    data: vec nat8;
+    filename: text;
+    size: nat64;
+};
+
+type Message = record {
+    id: nat64;
+    author: principal;
+    content: text;
+    timestamp: nat64;
+    reply_to: opt nat64;
+    message_type: MessageType;
+    attachments: vec Attachment;
+};
+
+type MessageWithAuthor = record {
+    id: nat64;
+    author: principal;
+    author_username: text;
+    content: text;
+    timestamp: nat64;
+    reply_to: opt nat64;
+    message_type: MessageType;
+    attachments: vec Attachment;
+};
+
+type User = record {
+    user_principal: principal;
+    username: text;
+    avatar_url: opt text;
+    bio: opt text;
+    joined_at: nat64;
+    message_count: nat64;
+    last_active: nat64;
+};
+
+type Channel = record {
+    id: nat64;
+    name: text;
+    description: opt text;
+    created_by: principal;
+    created_at: nat64;
+    members: vec principal;
+    message_count: nat64;
+    last_message_at: opt nat64;
+};
+
+type CreateMessageRequest = record {
+    content: text;
+    channel_id: opt nat64;
+    reply_to: opt nat64;
+    message_type: MessageType;
+    attachments: vec Attachment;
+};
+
+type CreateChannelRequest = record {
+    name: text;
+    description: opt text;
+};
+
+type UpdateUserRequest = record {
+    username: opt text;
+    bio: opt text;
+    avatar_url: opt text;
+};
+
+type PaginatedMessages = record {
+    messages: vec MessageWithAuthor;
+    total_count: nat64;
+    has_more: bool;
+};
+
+type ChatError = variant {
+    NotFound;
+    NotAuthorized;
+    InvalidInput;
+    UserAlreadyExists;
+    ChannelNotFound;
+    MessageTooLarge;
+    AttachmentTooLarge;
+};
+
+type Stats = record {
+    users: nat64;
+    messages: nat64;
+    channels: nat64;
+};
+
+service : {
+    // User management
+    register_user: (text, opt text) -> (variant { Ok: User; Err: ChatError });
+    update_user: (UpdateUserRequest) -> (variant { Ok: User; Err: ChatError });
+    get_user: (principal) -> (opt User) query;
+    get_current_user: () -> (opt User) query;
+    get_all_users: () -> (vec User) query;
+    
+    // Channel management
+    create_channel: (CreateChannelRequest) -> (variant { Ok: Channel; Err: ChatError });
+    get_channel: (nat64) -> (opt Channel) query;
+    get_all_channels: () -> (vec Channel) query;
+    join_channel: (nat64) -> (variant { Ok: null; Err: ChatError });
+    
+    // Message management
+    send_message: (CreateMessageRequest) -> (variant { Ok: Message; Err: ChatError });
+    get_messages: (opt nat64, opt nat64, opt nat64) -> (PaginatedMessages) query;
+    get_message: (nat64) -> (opt MessageWithAuthor) query;
+    
+    // Stats
+    get_stats: () -> (vec record { text; nat64 }) query;
+}
