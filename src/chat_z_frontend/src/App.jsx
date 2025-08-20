@@ -10,22 +10,22 @@ import ChatRoom from './components/ChatRoom.jsx';
 import ChannelList from './components/ChannelList.jsx';
 import UserProfile from './components/UserProfile.jsx';
 import MessageDisplay from './components/MessageDisplay.jsx';
+import PasswordModal from './components/PasswordModal.jsx';
 
 function App() {
   const { isAuth, login, logout, currentUser, registerUser, messages } = useAuth();
-  const { channels, currentChannel, selectChannel, createChannel } = useChat();
+  const { channels, currentChannel, selectChannel, createChannel, joinChannel, refreshData, encryptedMessages, decryptAllChannelMessages, loadEncryptedMessages } = useChat();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [channelToJoin, setChannelToJoin] = useState(null);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   useEffect(() => {
-    // Handle routing based on auth state
-    if (!isAuth) {
-      navigate('/');
-    } else {
-      // If authenticated, redirect to chat
-      navigate('/chat');
-    }
-  }, [isAuth, navigate]);
+    // Always go to chat - guests can view as read-only
+    navigate('/chat');
+  }, [navigate]);
 
   const handleLogin = () => {
     login();
@@ -39,44 +39,24 @@ function App() {
   const handleRegister = async (username, bio) => {
     const result = await registerUser(username, bio);
     if (result) {
+      // Refresh chat data after successful registration
+      if (typeof refreshData === 'function') {
+        await refreshData();
+        
+        // After refreshing, wait a bit and then auto-select General channel (ID 1)
+        setTimeout(() => {
+          const generalChannel = channels.find(ch => ch.id === 1);
+          if (generalChannel && !currentChannel) {
+            selectChannel(generalChannel);
+          }
+        }, 500);
+      }
+      
       navigate('/chat');
     }
   };
 
-  if (!isAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <Routes>
-          <Route 
-            path="/*" 
-            element={
-              <LoginPage 
-                onLogin={handleLogin}
-                onRegister={handleRegister}
-                isLoading={false}
-              />
-            } 
-          />
-        </Routes>
-        
-        {/* Message notifications */}
-        <div className="fixed top-4 right-4 z-50 space-y-2">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`px-4 py-2 rounded-lg shadow-lg ${
-                message.type === 'success' ? 'bg-green-500 text-white' :
-                message.type === 'error' ? 'bg-red-500 text-white' :
-                'bg-blue-500 text-white'
-              }`}
-            >
-              {message.text}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Guests can now see the chat interface but with limited functionality
 
   // Show registration form if authenticated but not registered
   if (isAuth && !currentUser) {
@@ -155,46 +135,107 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Header 
-        user={currentUser}
-        onLogout={handleLogout}
-        onProfileClick={() => setShowProfile(true)}
-      />
-      
-      <div className="flex-1 flex overflow-hidden">
+    <div className="min-h-screen flex flex-col">
+      {/* Main Header - 64px height */}
+      <div className="fixed top-0 left-0 right-0  bg-white shadow-sm h-16">
+        <Header 
+          user={currentUser}
+          onLogout={handleLogout}
+          onProfileClick={() => setShowProfile(true)}
+          onLogin={() => setShowLoginModal(true)}
+        />
+      </div>
+
+      {/* Main Content - starts after main header */}
+      <div className="flex flex-1 mt-16">
         <Routes>
           <Route 
             path="/chat" 
             element={
-              <div className="flex flex-1">
-                <div className="w-64 bg-white shadow-lg">
+              <div className="flex w-full h-[calc(100vh-64px)] bg-white">
+                {/* Desktop Sidebar */}
+                <div className="hidden lg:block w-64 bg-white border-r border-gray-200">
                   <ChannelList 
                     channels={channels}
                     currentChannel={currentChannel}
                     onChannelSelect={selectChannel}
                     onCreateChannel={createChannel}
+                    onJoinChannel={joinChannel}
+                    setShowPasswordModal={setShowPasswordModal}
+                    setChannelToJoin={setChannelToJoin}
                   />
                 </div>
-                <div className="flex-1 flex flex-col">
-                  {currentChannel ? (
-                    <>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <MessageDisplay />
+
+                {/* Mobile Sidebar */}
+                {showMobileSidebar && (
+                  <div className="fixed inset-0 z-[60] lg:hidden">
+                    <div className="fixed inset-0 bg-black/50" onClick={() => setShowMobileSidebar(false)} />
+                    <div className="fixed inset-y-0 left-0 w-full max-w-sm bg-white shadow-xl z-50">
+                      <div className="flex items-center justify-between p-4 border-b">
+                        <h2 className="text-lg font-semibold">Channels</h2>
+                        <button onClick={() => setShowMobileSidebar(false)} className="p-2 text-gray-500">
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
-                      <div className="border-t bg-white p-4">
+                      <ChannelList 
+                        channels={channels}
+                        currentChannel={currentChannel}
+                        onChannelSelect={(channel) => {
+                          selectChannel(channel);
+                          setShowMobileSidebar(false);
+                        }}
+                        onCreateChannel={createChannel}
+                        onJoinChannel={joinChannel}
+                        setShowPasswordModal={setShowPasswordModal}
+                        setChannelToJoin={setChannelToJoin}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Chat Area */}
+                <div className="flex-1 flex flex-col bg-white relative w-full max-w-full overflow-hidden pt-12">
+                  {/* Mobile Menu Button */}
+                  <div className="lg:hidden flex items-center h-12 px-4 gap-2 border-b">
+                    <button
+                      onClick={() => setShowMobileSidebar(true)}
+                      className="p-1 -ml-1 text-gray-600 hover:text-gray-900"
+                    >
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {currentChannel ? (
+                    <div className="flex-1 flex flex-col min-h-0  p-2 ">
+<div className="flex-1 overflow-y-auto overflow-x-hidden lg:pt-0 px-4 w-full max-w-full pt-4"> {/* ADD pt-4 here */}
+                        <MessageDisplay 
+                          setShowMobileSidebar={setShowMobileSidebar}
+                          setChannelToJoin={setChannelToJoin}
+                        />
+                      </div>
+                      <div className="border-t bg-white">
                         <ChatRoom />
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="flex-1 flex items-center justify-center p-4">
                       <div className="text-center">
-                        <h2 className="text-2xl font-bold text-gray-600 mb-2">
-                          Welcome to Chat Z!
-                        </h2>
-                        <p className="text-gray-500">
-                          Select a channel to start chatting
+                        <h2 className="text-xl font-semibold text-gray-700 mb-2">Welcome to Chat Z!</h2>
+                        <p className="text-gray-500 mb-4">
+                          {/* Show different message on mobile */}
+                          <span className="lg:hidden">Tap the menu to select a channel</span>
+                          <span className="hidden lg:inline">Select a channel to start chatting</span>
                         </p>
+                        <button
+                          onClick={() => setShowMobileSidebar(true)}
+                          className="lg:hidden px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                        >
+                          Browse Channels
+                        </button>
                       </div>
                     </div>
                   )}
@@ -213,13 +254,46 @@ function App() {
           onClose={() => setShowProfile(false)}
         />
       )}
+      
+      {/* Login Modal for Guests */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Login to Chat Z</h2>
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <LoginPage 
+                onLogin={() => {
+                  handleLogin();
+                  setShowLoginModal(false);
+                }}
+                onRegister={(username, bio) => {
+                  handleRegister(username, bio);
+                  setShowLoginModal(false);
+                }}
+                isLoading={false}
+                isModal={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Message notifications */}
-      <div className="fixed top-20 right-4 z-50 space-y-2">
+      <div className="fixed z-50 space-y-2 sm:top-20 sm:right-4 sm:w-auto w-full bottom-[88px] sm:bottom-auto px-4 sm:px-0">
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`px-4 py-2 rounded-lg shadow-lg ${
+            className={`px-4 py-2 rounded-lg shadow-lg flex justify-center sm:justify-start max-w-[90%] sm:max-w-none mx-auto sm:mx-0 ${
               message.type === 'success' ? 'bg-green-500 text-white' :
               message.type === 'error' ? 'bg-red-500 text-white' :
               'bg-blue-500 text-white'
@@ -229,6 +303,28 @@ function App() {
           </div>
         ))}
       </div>
+
+      {/* Password Modal */}
+      {showPasswordModal && channelToJoin && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/75 transition-opacity" />
+          <div className="relative z-[10000] w-full max-w-lg p-6 bg-white rounded-xl shadow-2xl">
+            <PasswordModal
+              channelName={channelToJoin.name}
+              needsPassword={Boolean(channelToJoin.password_hash && channelToJoin.password_hash.length > 0)}
+              onSubmit={(password) => {
+                joinChannel(channelToJoin.id, password ? [password] : []);
+                setShowPasswordModal(false);
+                setChannelToJoin(null);
+              }}
+              onCancel={() => {
+                setShowPasswordModal(false);
+                setChannelToJoin(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

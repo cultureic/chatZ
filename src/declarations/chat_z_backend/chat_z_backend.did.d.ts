@@ -17,6 +17,8 @@ export interface Channel {
   'created_at' : bigint,
   'created_by' : Principal,
   'message_count' : bigint,
+  'is_encrypted' : boolean,
+  'password_hash' : [] | [string],
 }
 export type ChatError = { 'UserAlreadyExists' : null } |
   { 'MessageTooLarge' : null } |
@@ -24,7 +26,8 @@ export type ChatError = { 'UserAlreadyExists' : null } |
   { 'ChannelNotFound' : null } |
   { 'NotFound' : null } |
   { 'NotAuthorized' : null } |
-  { 'AttachmentTooLarge' : null };
+  { 'AttachmentTooLarge' : null } |
+  { 'InvalidPassword' : null };
 export interface CreateChannelRequest {
   'name' : string,
   'description' : [] | [string],
@@ -34,6 +37,18 @@ export interface CreateMessageRequest {
   'content' : string,
   'reply_to' : [] | [bigint],
   'message_type' : MessageType,
+  'attachments' : Array<Attachment>,
+}
+export interface EncryptedMessage {
+  'id' : bigint,
+  'channel_id' : [] | [bigint],
+  'reply_to' : [] | [bigint],
+  'encrypted_content' : string,
+  'author' : Principal,
+  'timestamp' : bigint,
+  'message_type' : MessageType,
+  'shared_with' : Array<Principal>,
+  'expires_at' : bigint,
   'attachments' : Array<Attachment>,
 }
 export interface Message {
@@ -75,6 +90,7 @@ export interface UpdateUserRequest {
 }
 export interface User {
   'bio' : [] | [string],
+  'encrypted_keys' : Array<[string, string]>,
   'user_principal' : Principal,
   'username' : string,
   'avatar_url' : [] | [string],
@@ -83,8 +99,43 @@ export interface User {
   'joined_at' : bigint,
 }
 export interface _SERVICE {
+  'cleanup_expired_messages' : ActorMethod<[], bigint>,
   'create_channel' : ActorMethod<
     [CreateChannelRequest],
+    { 'Ok' : Channel } |
+      { 'Err' : ChatError }
+  >,
+  'create_encrypted_channel' : ActorMethod<
+    [string, [] | [string], [] | [string]],
+    { 'Ok' : Channel } |
+      { 'Err' : ChatError }
+  >,
+  'create_encrypted_message' : ActorMethod<
+    [string, [] | [bigint], [] | [bigint], MessageType, Array<Attachment>],
+    { 'Ok' : bigint } |
+      { 'Err' : ChatError }
+  >,
+  'decrypt_all_messages_from_channel' : ActorMethod<
+    [bigint],
+    Array<MessageWithAuthor>
+  >,
+  'decrypt_encrypted_message' : ActorMethod<
+    [bigint],
+    { 'Ok' : string } |
+      { 'Err' : string }
+  >,
+  'delete_encrypted_message' : ActorMethod<
+    [bigint],
+    { 'Ok' : null } |
+      { 'Err' : ChatError }
+  >,
+  'encrypted_symmetric_key_for_message' : ActorMethod<
+    [bigint],
+    { 'Ok' : Uint8Array | number[] } |
+      { 'Err' : string }
+  >,
+  'fix_general_channel' : ActorMethod<
+    [],
     { 'Ok' : Channel } |
       { 'Err' : ChatError }
   >,
@@ -92,6 +143,11 @@ export interface _SERVICE {
   'get_all_users' : ActorMethod<[], Array<User>>,
   'get_channel' : ActorMethod<[bigint], [] | [Channel]>,
   'get_current_user' : ActorMethod<[], [] | [User]>,
+  'get_encrypted_messages' : ActorMethod<[], Array<EncryptedMessage>>,
+  'get_encrypted_messages_from_channel' : ActorMethod<
+    [bigint],
+    Array<EncryptedMessage>
+  >,
   'get_message' : ActorMethod<[bigint], [] | [MessageWithAuthor]>,
   'get_messages' : ActorMethod<
     [[] | [bigint], [] | [bigint], [] | [bigint]],
@@ -113,6 +169,16 @@ export interface _SERVICE {
     [CreateMessageRequest],
     { 'Ok' : Message } |
       { 'Err' : ChatError }
+  >,
+  'share_encrypted_message' : ActorMethod<
+    [bigint, Principal],
+    { 'Ok' : null } |
+      { 'Err' : ChatError }
+  >,
+  'symmetric_key_verification_key_for_encrypted_message' : ActorMethod<
+    [],
+    { 'Ok' : Uint8Array | number[] } |
+      { 'Err' : string }
   >,
   'update_user' : ActorMethod<
     [UpdateUserRequest],

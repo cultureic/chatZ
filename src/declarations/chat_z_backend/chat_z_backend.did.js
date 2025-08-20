@@ -12,6 +12,8 @@ export const idlFactory = ({ IDL }) => {
     'created_at' : IDL.Nat64,
     'created_by' : IDL.Principal,
     'message_count' : IDL.Nat64,
+    'is_encrypted' : IDL.Bool,
+    'password_hash' : IDL.Opt(IDL.Text),
   });
   const ChatError = IDL.Variant({
     'UserAlreadyExists' : IDL.Null,
@@ -21,15 +23,6 @@ export const idlFactory = ({ IDL }) => {
     'NotFound' : IDL.Null,
     'NotAuthorized' : IDL.Null,
     'AttachmentTooLarge' : IDL.Null,
-  });
-  const User = IDL.Record({
-    'bio' : IDL.Opt(IDL.Text),
-    'user_principal' : IDL.Principal,
-    'username' : IDL.Text,
-    'avatar_url' : IDL.Opt(IDL.Text),
-    'last_active' : IDL.Nat64,
-    'message_count' : IDL.Nat64,
-    'joined_at' : IDL.Nat64,
   });
   const MessageType = IDL.Variant({
     'System' : IDL.Null,
@@ -50,6 +43,28 @@ export const idlFactory = ({ IDL }) => {
     'timestamp' : IDL.Nat64,
     'author_username' : IDL.Text,
     'message_type' : MessageType,
+    'attachments' : IDL.Vec(Attachment),
+  });
+  const User = IDL.Record({
+    'bio' : IDL.Opt(IDL.Text),
+    'encrypted_keys' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+    'user_principal' : IDL.Principal,
+    'username' : IDL.Text,
+    'avatar_url' : IDL.Opt(IDL.Text),
+    'last_active' : IDL.Nat64,
+    'message_count' : IDL.Nat64,
+    'joined_at' : IDL.Nat64,
+  });
+  const EncryptedMessage = IDL.Record({
+    'id' : IDL.Nat64,
+    'channel_id' : IDL.Opt(IDL.Nat64),
+    'reply_to' : IDL.Opt(IDL.Nat64),
+    'encrypted_content' : IDL.Text,
+    'author' : IDL.Principal,
+    'timestamp' : IDL.Nat64,
+    'message_type' : MessageType,
+    'shared_with' : IDL.Vec(IDL.Principal),
+    'expires_at' : IDL.Nat64,
     'attachments' : IDL.Vec(Attachment),
   });
   const PaginatedMessages = IDL.Record({
@@ -79,8 +94,50 @@ export const idlFactory = ({ IDL }) => {
     'avatar_url' : IDL.Opt(IDL.Text),
   });
   return IDL.Service({
+    'cleanup_expired_messages' : IDL.Func([], [IDL.Nat64], []),
     'create_channel' : IDL.Func(
         [CreateChannelRequest],
+        [IDL.Variant({ 'Ok' : Channel, 'Err' : ChatError })],
+        [],
+      ),
+    'create_encrypted_channel' : IDL.Func(
+        [IDL.Text, IDL.Opt(IDL.Text), IDL.Opt(IDL.Text)],
+        [IDL.Variant({ 'Ok' : Channel, 'Err' : ChatError })],
+        [],
+      ),
+    'create_encrypted_message' : IDL.Func(
+        [
+          IDL.Text,
+          IDL.Opt(IDL.Nat64),
+          IDL.Opt(IDL.Nat64),
+          MessageType,
+          IDL.Vec(Attachment),
+        ],
+        [IDL.Variant({ 'Ok' : IDL.Nat64, 'Err' : ChatError })],
+        [],
+      ),
+    'decrypt_all_messages_from_channel' : IDL.Func(
+        [IDL.Nat64],
+        [IDL.Vec(MessageWithAuthor)],
+        [],
+      ),
+    'decrypt_encrypted_message' : IDL.Func(
+        [IDL.Nat64],
+        [IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text })],
+        [],
+      ),
+    'delete_encrypted_message' : IDL.Func(
+        [IDL.Nat64],
+        [IDL.Variant({ 'Ok' : IDL.Null, 'Err' : ChatError })],
+        [],
+      ),
+    'encrypted_symmetric_key_for_message' : IDL.Func(
+        [IDL.Nat64],
+        [IDL.Variant({ 'Ok' : IDL.Vec(IDL.Nat8), 'Err' : IDL.Text })],
+        [],
+      ),
+    'fix_general_channel' : IDL.Func(
+        [],
         [IDL.Variant({ 'Ok' : Channel, 'Err' : ChatError })],
         [],
       ),
@@ -88,6 +145,12 @@ export const idlFactory = ({ IDL }) => {
     'get_all_users' : IDL.Func([], [IDL.Vec(User)], ['query']),
     'get_channel' : IDL.Func([IDL.Nat64], [IDL.Opt(Channel)], ['query']),
     'get_current_user' : IDL.Func([], [IDL.Opt(User)], ['query']),
+    'get_encrypted_messages' : IDL.Func([], [IDL.Vec(EncryptedMessage)], []),
+    'get_encrypted_messages_from_channel' : IDL.Func(
+        [IDL.Nat64],
+        [IDL.Vec(EncryptedMessage)],
+        ['query'],
+      ),
     'get_message' : IDL.Func(
         [IDL.Nat64],
         [IDL.Opt(MessageWithAuthor)],
@@ -105,7 +168,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'get_user' : IDL.Func([IDL.Principal], [IDL.Opt(User)], ['query']),
     'join_channel' : IDL.Func(
-        [IDL.Nat64],
+        [IDL.Nat64, IDL.Opt(IDL.Text)],
         [IDL.Variant({ 'Ok' : IDL.Null, 'Err' : ChatError })],
         [],
       ),
@@ -117,6 +180,16 @@ export const idlFactory = ({ IDL }) => {
     'send_message' : IDL.Func(
         [CreateMessageRequest],
         [IDL.Variant({ 'Ok' : Message, 'Err' : ChatError })],
+        [],
+      ),
+    'share_encrypted_message' : IDL.Func(
+        [IDL.Nat64, IDL.Principal],
+        [IDL.Variant({ 'Ok' : IDL.Null, 'Err' : ChatError })],
+        [],
+      ),
+    'symmetric_key_verification_key_for_encrypted_message' : IDL.Func(
+        [],
+        [IDL.Variant({ 'Ok' : IDL.Vec(IDL.Nat8), 'Err' : IDL.Text })],
         [],
       ),
     'update_user' : IDL.Func(

@@ -40,6 +40,7 @@ type User = record {
     joined_at: nat64;
     message_count: nat64;
     last_active: nat64;
+    encrypted_keys: vec record { text; text };
 };
 
 type Channel = record {
@@ -51,6 +52,8 @@ type Channel = record {
     members: vec principal;
     message_count: nat64;
     last_message_at: opt nat64;
+    is_encrypted: bool;
+    password_hash: opt text;
 };
 
 type CreateMessageRequest = record {
@@ -86,6 +89,20 @@ type ChatError = variant {
     ChannelNotFound;
     MessageTooLarge;
     AttachmentTooLarge;
+    InvalidPassword;
+};
+
+type EncryptedMessage = record {
+    id: nat64;
+    encrypted_content: text;
+    author: principal;
+    timestamp: nat64;
+    expires_at: nat64;
+    channel_id: opt nat64;
+    reply_to: opt nat64;
+    message_type: MessageType;
+    shared_with: vec principal;
+    attachments: vec Attachment;
 };
 
 type Stats = record {
@@ -106,12 +123,32 @@ service : {
     create_channel: (CreateChannelRequest) -> (variant { Ok: Channel; Err: ChatError });
     get_channel: (nat64) -> (opt Channel) query;
     get_all_channels: () -> (vec Channel) query;
-    join_channel: (nat64) -> (variant { Ok: null; Err: ChatError });
+    join_channel: (nat64, opt text) -> (variant { Ok: null; Err: ChatError });
     
     // Message management
     send_message: (CreateMessageRequest) -> (variant { Ok: Message; Err: ChatError });
     get_messages: (opt nat64, opt nat64, opt nat64) -> (PaginatedMessages) query;
     get_message: (nat64) -> (opt MessageWithAuthor) query;
+    
+    // Encrypted channel management
+    create_encrypted_channel: (text, opt text, opt text) -> (variant { Ok: Channel; Err: ChatError });
+    
+    // Encrypted message management
+    create_encrypted_message: (text, opt nat64, opt nat64, MessageType, vec Attachment) -> (variant { Ok: nat64; Err: ChatError });
+    get_encrypted_messages: () -> (vec EncryptedMessage);
+    get_encrypted_messages_from_channel: (nat64) -> (vec EncryptedMessage) query;
+    decrypt_encrypted_message: (nat64) -> (variant { Ok: text; Err: text });
+    decrypt_all_messages_from_channel: (nat64) -> (vec MessageWithAuthor);
+    share_encrypted_message: (nat64, principal) -> (variant { Ok: null; Err: ChatError });
+    delete_encrypted_message: (nat64) -> (variant { Ok: null; Err: ChatError });
+    cleanup_expired_messages: () -> (nat64);
+    
+    // Admin functions
+    fix_general_channel: () -> (variant { Ok: Channel; Err: ChatError });
+    
+    // VetKeys functions
+    symmetric_key_verification_key_for_encrypted_message: () -> (variant { Ok: vec nat8; Err: text });
+    encrypted_symmetric_key_for_message: (nat64) -> (variant { Ok: vec nat8; Err: text });
     
     // Stats
     get_stats: () -> (vec record { text; nat64 }) query;

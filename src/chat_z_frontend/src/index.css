@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  @apply h-full overflow-hidden;
+}
+
+#root {
+  @apply h-full overflow-hidden;
+}
+
+/* Fix iOS height issues */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+  #root {
+    height: -webkit-fill-available;
+  }
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',

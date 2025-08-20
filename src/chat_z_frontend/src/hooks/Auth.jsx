@@ -99,6 +99,7 @@ export const useAuthClient = (options = defaultOptions) => {
     // Load user data if authenticated
     if (isAuthenticated) {
       await loadCurrentUser(identity);
+      console.log('User authenticated, principal:', principalText);
       addMessage("Welcome to Chat Z!", "success");
     } else {
       setCurrentUser(null);
@@ -126,6 +127,15 @@ export const useAuthClient = (options = defaultOptions) => {
       
       if ('Ok' in result) {
         setCurrentUser(result.Ok);
+        
+        // Auto-join the General channel (ID = 1) after registration
+        try {
+          await chatActor.join_channel(1);
+          console.log("Successfully joined General channel");
+        } catch (joinError) {
+          console.log("Failed to join General channel (likely already a member):", joinError);
+        }
+        
         addMessage("Registration successful!", "success");
         return result.Ok;
       } else {

@@ -6,9 +6,12 @@ const IS_PRODUCTION = true;
 const PRODUCTION_CANISTER_ID = "evkxr-waaaa-aaaag-attza-cai";
 const PRODUCTION_HOST = "https://ic0.app";
 
+// LOCAL DEVELOPMENT CANISTER ID  
+const LOCAL_CANISTER_ID = "umunu-kh777-77774-qaaca-cai";
+
 const createActor = (canisterId, options) => {
   const host = IS_PRODUCTION ? PRODUCTION_HOST : "http://127.0.0.1:4943";
-  console.log(`🚀 PRODUCTION MODE: Connecting to host: ${host} with canister: ${canisterId}`);
+  console.log(`🚀 ${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPMENT'} MODE: Connecting to host: ${host} with canister: ${canisterId}`);
   
   const agent = new HttpAgent({
     host,
@@ -36,9 +39,9 @@ export const createChatActor = (canisterId, options) => {
   return createActor(canisterId, options);
 };
 
-// FORCE PRODUCTION CANISTER ID
+// USE APPROPRIATE CANISTER ID BASED ON ENVIRONMENT
 export const getChatCanisterId = () => {
-  return PRODUCTION_CANISTER_ID;
+  return IS_PRODUCTION ? PRODUCTION_CANISTER_ID : LOCAL_CANISTER_ID;
 };
 
 export const DEFAULT_CHAT_CANISTER_ID = getChatCanisterId();

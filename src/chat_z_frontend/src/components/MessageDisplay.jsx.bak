@@ -1,0 +1,229 @@
+import { useChat } from '../hooks/ChatProvider.jsx';
+import { useAuth } from '../hooks/Auth.jsx';
+import { useEffect, useRef, useState } from 'react';
+import EncryptedMessageDisplay from './EncryptedMessageDisplay.jsx';
+
+const MessageDisplay = () => {
+  const { 
+    messages, 
+    currentChannel, 
+    encryptedMessages,
+    decryptedMessages,
+    loadEncryptedMessages,
+    decryptAllChannelMessages 
+  } = useChat();
+  const { currentUser } = useAuth();
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, encryptedMessages]);
+
+  // Load encrypted messages when channel changes
+  useEffect(() => {
+    if (currentChannel?.is_encrypted) {
+      loadEncryptedMessages(currentChannel.id);
+    }
+  }, [currentChannel]);
+
+  const formatTime = (timestamp) => {
+    const date = new Date(Number(timestamp) / 1000000); // Convert from nanoseconds
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (timestamp) => {
+    const date = new Date(Number(timestamp) / 1000000);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
+
+  const isOwnMessage = (message) => {
+    return currentUser && message.author.toText() === currentUser.user_principal.toText();
+  };
+
+  if (!currentChannel) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <svg className="h-16 w-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No channel selected</h3>
+          <p className="text-gray-500">Choose a channel to start chatting</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <svg className="h-16 w-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 10v-1a6 6 0 112 0v1m2 6V9a6 6 0 10-12 0v1m12 0a1 1 0 01-1 1H6a1 1 0 01-1-1V9a1 1 0 011-1h12a1 1 0 011 1z" />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No messages yet</h3>
+          <p className="text-gray-500">Start the conversation in #{currentChannel.name}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Group messages by date
+  const messagesByDate = {};
+  messages.forEach(message => {
+    const dateKey = formatDate(message.timestamp);
+    if (!messagesByDate[dateKey]) {
+      messagesByDate[dateKey] = [];
+    }
+    messagesByDate[dateKey].push(message);
+  });
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Channel header */}
+      <div className="p-2 sm:p-4 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {currentChannel.is_encrypted ? '🔒 ' : '#'}{currentChannel.name}
+            </h2>
+            {currentChannel.is_encrypted && (
+              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                Encrypted
+              </span>
+            )}
+          </div>
+
+          {/* Encryption Actions */}
+          {currentChannel.is_encrypted && (
+            <div className="flex space-x-2">
+              <button
+                onClick={() => loadEncryptedMessages(currentChannel.id)}
+                className="px-3 py-1 text-xs text-yellow-600 border border-yellow-300 rounded hover:bg-yellow-50"
+              >
+                🔄 Refresh
+              </button>
+              <button
+                onClick={() => decryptAllChannelMessages(currentChannel.id)}
+                className="px-3 py-1 text-xs text-white bg-yellow-600 hover:bg-yellow-700 rounded"
+              >
+                🔓 Decrypt All
+              </button>
+            </div>
+          )}
+          {currentChannel.description && (
+            <p className="text-sm text-gray-600 mt-1">{currentChannel.description[0]}</p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            {currentChannel.members.length} member{currentChannel.members.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Regular Messages */}
+        {Object.entries(messagesByDate).map(([date, dayMessages]) => (
+          <div key={date}>
+            {/* Date divider */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="px-4 bg-gray-100 text-sm text-gray-600 font-medium">
+                  {date}
+                </span>
+              </div>
+            </div>
+
+            {/* Messages for this date */}
+            <div className="mt-4 space-y-3">
+              {dayMessages.map((message) => {
+                const isOwn = isOwnMessage(message);
+                
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`flex items-start space-x-2 max-w-xs lg:max-w-md ${isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                      {/* Avatar */}
+                      <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                        isOwn 
+                          ? 'bg-gradient-to-r from-purple-400 to-blue-500' 
+                          : 'bg-gradient-to-r from-green-400 to-blue-500'
+                      }`}>
+                        <span className="text-white font-medium text-sm">
+                          {message.author_username ? message.author_username[0].toUpperCase() : '?'}
+                        </span>
+                      </div>
+                      
+                      {/* Message content */}
+                      <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                        <div className={`px-3 py-2 rounded-lg ${
+                          isOwn 
+                            ? 'bg-blue-500 text-white' 
+                            : 'bg-white border border-gray-200 text-gray-900'
+                        }`}>
+                          <p className="text-sm whitespace-pre-wrap break-words">
+                            {message.content}
+                          </p>
+                        </div>
+                        <div className={`flex items-center space-x-1 mt-1 text-xs text-gray-500 ${isOwn ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                          <span>{message.author_username}</span>
+                          <span>•</span>
+                          <span>{formatTime(message.timestamp)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* Encrypted Messages Section */}
+        {currentChannel.is_encrypted && encryptedMessages?.length > 0 && (
+          <div className="border-t border-yellow-200 pt-4 mt-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <h3 className="text-sm font-medium text-yellow-800">Encrypted Messages</h3>
+              <span className="text-xs text-yellow-600">({encryptedMessages.length})</span>
+            </div>
+            
+            <div className="space-y-4">
+              {encryptedMessages.map((encryptedMessage) => (
+                <EncryptedMessageDisplay 
+                  key={encryptedMessage.id} 
+                  encryptedMessage={encryptedMessage} 
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+    </div>
+  );
+};
+
+export default MessageDisplay;
