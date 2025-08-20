@@ -40,7 +40,9 @@ A fully decentralized social messaging platform built on the Internet Computer, 
 
 ### 1. Clone and Setup
 ```bash
-cd /Users/cesarangulo/Documents/chat_z
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/chat_z.git
+cd chat_z
 
 # Install frontend dependencies
 cd src/frontend
