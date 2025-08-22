@@ -6,6 +6,7 @@ import Landing from './components/Landing';
 import UserRegistration from './components/UserRegistration';
 import ChatInterface from './components/ChatInterface';
 import './index.css';
+import { ckPay } from 'ckpay-sdk';
 
 // Protected route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -50,7 +51,6 @@ const RegistrationWrapper = ({ children }) => {
 // Main App Routes
 const AppRoutes = () => {
   const { isAuth, user } = useAuth();
-  
   return (
     <Routes>
       <Route 

@@ -13,6 +13,8 @@ import {
   Settings,
   Smile
 } from 'lucide-react';
+import { ckPay } from 'ckpay-sdk';
+
 
 const ChatInterface = () => {
   const { user, logout, principalText } = useAuth();
@@ -27,6 +29,7 @@ const ChatInterface = () => {
     isLoading,
     stats
   } = useChat();
+  console.log("ck pay",ckPay)
 
   const [messageText, setMessageText] = useState('');
   const [showChannelForm, setShowChannelForm] = useState(false);
