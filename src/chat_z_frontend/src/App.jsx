@@ -11,7 +11,6 @@ import ChannelList from './components/ChannelList.jsx';
 import UserProfile from './components/UserProfile.jsx';
 import MessageDisplay from './components/MessageDisplay.jsx';
 import PasswordModal from './components/PasswordModal.jsx';
-import { ckPay } from 'ckpay-sdk';
 
 
 function App() {
@@ -23,7 +22,6 @@ function App() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [channelToJoin, setChannelToJoin] = useState(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-   console.log("ckpay",ckPay)
   useEffect(() => {
     // Always go to chat - guests can view as read-only
     navigate('/chat');
